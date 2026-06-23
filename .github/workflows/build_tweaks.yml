@@ -31,6 +31,7 @@ jobs:
         run: |
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           echo "THEOS=${{ github.workspace }}/theos" >> $GITHUB_ENV
+          echo "THEOS_PACKAGE_SCHEME=rootless" >> $GITHUB_ENV
 
       # ──────────────────────────────────────────────
       # 2. Set up Theos + iOS SDK
@@ -62,6 +63,19 @@ jobs:
           git sparse-checkout set --no-cone iPhoneOS16.5.sdk
           git checkout
           mv *.sdk $THEOS/sdks
+
+      - name: Create SDK symlinks for backward compatibility
+        run: |
+          # Some tweaks request older SDKs (e.g. 14.5, 15.0).
+          # Symlink them to the 16.5 SDK we actually have.
+          cd $THEOS/sdks
+          for ver in 11.0 12.0 13.0 14.0 14.5 15.0 15.5 16.0 16.2; do
+            sdk_name="iPhoneOS${ver}.sdk"
+            if [ ! -d "$sdk_name" ] && [ -d "iPhoneOS16.5.sdk" ]; then
+              ln -s "iPhoneOS16.5.sdk" "$sdk_name"
+              echo "Created symlink: $sdk_name -> iPhoneOS16.5.sdk"
+            fi
+          done
 
       # ──────────────────────────────────────────────
       # 3. Clone shared header repos
@@ -174,42 +188,42 @@ jobs:
 
       - name: Build YouGroupSettings
         run: |
-          cd YouGroupSettings && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YouGroupSettings && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../yougroupsettings.deb
 
       - name: Build YTVideoOverlay
         run: |
-          cd YTVideoOverlay && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YTVideoOverlay && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytvideooverlay.deb
 
       - name: Build YouGetCaption
         run: |
-          cd YouGetCaption && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YouGetCaption && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../yougetcaption.deb
 
       - name: Build YTHoldForSpeed
         run: |
-          cd YTHoldForSpeed && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YTHoldForSpeed && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytholdforspeed.deb
 
       - name: Build YTVideoErrorAlert
         run: |
-          cd YTVideoErrorAlert && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YTVideoErrorAlert && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytvideoerroralert.deb
 
       - name: Build Gonerino
         run: |
-          cd Gonerino && make clean package DEBUG=0 FINALPACKAGE=1
+          cd Gonerino && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../gonerino.deb
 
       - name: Build VolumeBoostYT
         run: |
-          cd VolumeBoostYT && make clean package DEBUG=0 FINALPACKAGE=1
+          cd VolumeBoostYT && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../volumeboostyt.deb
 
       - name: Build YTABConfig
         run: |
-          cd YTABConfig && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YTABConfig && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytabconfig.deb
 
       # ──────────────────────────────────────────────
@@ -227,37 +241,37 @@ jobs:
 
       - name: Build YouPiP
         run: |
-          cd YouPiP && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YouPiP && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../youpip.deb
 
       - name: Build YTUHD
         run: |
-          cd YTUHD && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YTUHD && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytuhd.deb
 
       - name: Build YouQuality
         run: |
-          cd YouQuality && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YouQuality && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../youquality.deb
 
       - name: Build YouChooseQuality
         run: |
-          cd YouChooseQuality && make clean package DEBUG=0 FINALPACKAGE=1
+          cd YouChooseQuality && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../youchoosequality.deb
 
       - name: Build Return-YouTube-Dislikes
         run: |
-          cd Return-YouTube-Dislikes && make clean package DEBUG=0 FINALPACKAGE=1
+          cd Return-YouTube-Dislikes && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ryd.deb
 
       - name: Build DontEatMyContent
         run: |
-          cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1
+          cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../demc.deb
 
       - name: Build YouTubeNativeShare
         run: |
-          cd youtube-native-share && make clean package DEBUG=0 FINALPACKAGE=1
+          cd youtube-native-share && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytnativeshare.deb
 
       # ──────────────────────────────────────────────
