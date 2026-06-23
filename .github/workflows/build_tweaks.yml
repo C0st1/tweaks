@@ -27,7 +27,7 @@ jobs:
       - name: Install Dependencies
         run: brew install make ldid dpkg
 
-      - name: Set PATH environment variable
+      - name: Set PATH and environment variables
         run: |
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           echo "THEOS=${{ github.workspace }}/theos" >> $GITHUB_ENV
@@ -66,8 +66,6 @@ jobs:
 
       - name: Create SDK symlinks for backward compatibility
         run: |
-          # Some tweaks request older SDKs (e.g. 14.5, 15.0).
-          # Symlink them to the 16.5 SDK we actually have.
           cd $THEOS/sdks
           for ver in 11.0 12.0 13.0 14.0 14.5 15.0 15.5 16.0 16.2; do
             sdk_name="iPhoneOS${ver}.sdk"
@@ -105,12 +103,6 @@ jobs:
       - name: Clone Gonerino
         run: git clone --quiet --depth=1 https://github.com/castdrian/Gonerino.git
 
-      - name: Clone VolumeBoostYT
-        run: git clone --quiet --depth=1 https://github.com/VasirakCalgux/VolumeBoostYT.git
-
-      - name: Clone YouChooseQuality
-        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouChooseQuality.git
-
       - name: Clone YouGetCaption
         run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouGetCaption.git
 
@@ -126,14 +118,8 @@ jobs:
       - name: Clone Return-YouTube-Dislikes
         run: git clone --quiet --depth=1 https://github.com/PoomSmart/Return-YouTube-Dislikes.git
 
-      - name: Clone YouTubeNativeShare
-        run: git clone --quiet --depth=1 https://github.com/jkhsjdhjs/youtube-native-share.git
-
       - name: Clone YTABConfig
         run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTABConfig.git
-
-      - name: Clone YTHoldForSpeed
-        run: git clone --quiet --depth=1 https://github.com/joshuaseltzer/YTHoldForSpeed.git
 
       - name: Clone YTUHD
         run: git clone --quiet --depth=1 https://github.com/Tonwalter888/YTUHD.git
@@ -146,20 +132,16 @@ jobs:
 
       # ──────────────────────────────────────────────
       # 5. Copy inter-tweak headers for compilation
-      #    Some tweaks import headers from other tweaks
       # ──────────────────────────────────────────────
       - name: Copy inter-tweak headers
         run: |
           # YouGroupSettings headers — needed by YouPiP, YTUHD, YouQuality, RYD
           if [ -d "YouGroupSettings" ]; then
-            cp -R YouGroupSettings/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
-            # Also try copying from source if .theos doesn't exist yet
             find YouGroupSettings -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
           fi
 
           # YTVideoOverlay headers — needed by YouPiP, YTUHD, YouQuality
           if [ -d "YTVideoOverlay" ]; then
-            cp -R YTVideoOverlay/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
             find YTVideoOverlay -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
           fi
 
@@ -167,11 +149,6 @@ jobs:
           if [ -d "$THEOS/include/YouTubeHeader" ]; then
             rm -rf "$THEOS/include/YTHeaders"
             cp -R "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
-          fi
-
-          # YouTubeNativeShare may need protobuf headers
-          if [ -d "youtube-native-share" ]; then
-            find youtube-native-share -path "*/protobuf/objectivec/*.h" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
           fi
 
       # ──────────────────────────────────────────────
@@ -183,7 +160,7 @@ jobs:
           wget "$deb_url" --no-verbose -O ytlite.deb
 
       # ──────────────────────────────────────────────
-      # 7. Build each tweak (Tier 1: no inter-tweak deps)
+      # 7. Build Tier 1 tweaks (no inter-tweak dependencies)
       # ──────────────────────────────────────────────
 
       - name: Build YouGroupSettings
@@ -201,11 +178,6 @@ jobs:
           cd YouGetCaption && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../yougetcaption.deb
 
-      - name: Build YTHoldForSpeed
-        run: |
-          cd YTHoldForSpeed && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
-          mv packages/*.deb ../ytholdforspeed.deb
-
       - name: Build YTVideoErrorAlert
         run: |
           cd YTVideoErrorAlert && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
@@ -216,23 +188,17 @@ jobs:
           cd Gonerino && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../gonerino.deb
 
-      - name: Build VolumeBoostYT
-        run: |
-          cd VolumeBoostYT && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
-          mv packages/*.deb ../volumeboostyt.deb
-
       - name: Build YTABConfig
         run: |
           cd YTABConfig && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytabconfig.deb
 
       # ──────────────────────────────────────────────
-      # 8. Build each tweak (Tier 2: depends on Tier 1 headers)
+      # 8. Build Tier 2 tweaks (depend on Tier 1 headers)
       # ──────────────────────────────────────────────
 
       - name: Re-copy YouGroupSettings headers after build
         run: |
-          # After building, .theos/Headers should now exist with generated headers
           cp -R YouGroupSettings/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
 
       - name: Re-copy YTVideoOverlay headers after build
@@ -254,11 +220,6 @@ jobs:
           cd YouQuality && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../youquality.deb
 
-      - name: Build YouChooseQuality
-        run: |
-          cd YouChooseQuality && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
-          mv packages/*.deb ../youchoosequality.deb
-
       - name: Build Return-YouTube-Dislikes
         run: |
           cd Return-YouTube-Dislikes && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
@@ -268,11 +229,6 @@ jobs:
         run: |
           cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../demc.deb
-
-      - name: Build YouTubeNativeShare
-        run: |
-          cd youtube-native-share && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
-          mv packages/*.deb ../ytnativeshare.deb
 
       # ──────────────────────────────────────────────
       # 9. Upload all .deb files
