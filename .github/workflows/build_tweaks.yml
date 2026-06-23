@@ -96,6 +96,9 @@ jobs:
 
       # ──────────────────────────────────────────────
       # 4. Clone all tweak source repos
+      #    NOTE: YouPiP and YouQuality use relative-path imports
+      #    ("../YTVideoOverlay/Header.h"), so YTVideoOverlay MUST
+      #    be cloned as a sibling directory before building them.
       # ──────────────────────────────────────────────
       - name: Clone DontEatMyContent
         run: git clone --quiet --depth=1 https://github.com/therealFoxster/DontEatMyContent.git
@@ -131,21 +134,11 @@ jobs:
         run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTVideoOverlay.git
 
       # ──────────────────────────────────────────────
-      # 5. Copy inter-tweak headers for compilation
+      # 5. Prepare inter-tweak header resolution
       # ──────────────────────────────────────────────
-      - name: Copy inter-tweak headers
+      - name: Copy shared headers to Theos include path
         run: |
-          # YouGroupSettings headers — needed by YouPiP, YTUHD, YouQuality, RYD
-          if [ -d "YouGroupSettings" ]; then
-            find YouGroupSettings -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
-          fi
-
-          # YTVideoOverlay headers — needed by YouPiP, YTUHD, YouQuality
-          if [ -d "YTVideoOverlay" ]; then
-            find YTVideoOverlay -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
-          fi
-
-          # DontEatMyContent needs YTHeaders copy of YouTubeHeader
+          # DontEatMyContent imports YTHeaders/ (not YouTubeHeader/)
           if [ -d "$THEOS/include/YouTubeHeader" ]; then
             rm -rf "$THEOS/include/YTHeaders"
             cp -R "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
@@ -160,7 +153,7 @@ jobs:
           wget "$deb_url" --no-verbose -O ytlite.deb
 
       # ──────────────────────────────────────────────
-      # 7. Build Tier 1 tweaks (no inter-tweak dependencies)
+      # 7. Build Tier 1 tweaks (no inter-tweak build deps)
       # ──────────────────────────────────────────────
 
       - name: Build YouGroupSettings
@@ -193,15 +186,26 @@ jobs:
           cd YTABConfig && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ytabconfig.deb
 
+      - name: Build DontEatMyContent
+        run: |
+          cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
+          mv packages/*.deb ../demc.deb
+
       # ──────────────────────────────────────────────
-      # 8. Build Tier 2 tweaks (depend on Tier 1 headers)
+      # 8. Build Tier 2 tweaks (depend on Tier 1)
+      #
+      # YouPiP and YouQuality import "../YTVideoOverlay/*"
+      # via relative path — this works because both repos
+      # are cloned as siblings in the workspace root.
+      # They also need YouGroupSettings headers at build time
+      # for the grouped settings UI.
       # ──────────────────────────────────────────────
 
-      - name: Re-copy YouGroupSettings headers after build
+      - name: Install YouGroupSettings headers
         run: |
           cp -R YouGroupSettings/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
 
-      - name: Re-copy YTVideoOverlay headers after build
+      - name: Install YTVideoOverlay headers
         run: |
           cp -R YTVideoOverlay/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
 
@@ -224,11 +228,6 @@ jobs:
         run: |
           cd Return-YouTube-Dislikes && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
           mv packages/*.deb ../ryd.deb
-
-      - name: Build DontEatMyContent
-        run: |
-          cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1 ROOTLESS=1
-          mv packages/*.deb ../demc.deb
 
       # ──────────────────────────────────────────────
       # 9. Upload all .deb files
