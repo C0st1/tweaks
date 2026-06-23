@@ -1,0 +1,294 @@
+name: Build YouTube Tweaks
+
+on:
+  workflow_dispatch:
+    inputs:
+      tweak_version:
+        description: "YTLite version from releases (default: 5.2.1)"
+        default: "5.2.1"
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build All Tweaks
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      # ──────────────────────────────────────────────
+      # 1. Install build dependencies
+      # ──────────────────────────────────────────────
+      - name: Install Dependencies
+        run: brew install make ldid dpkg
+
+      - name: Set PATH environment variable
+        run: |
+          echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
+          echo "THEOS=${{ github.workspace }}/theos" >> $GITHUB_ENV
+
+      # ──────────────────────────────────────────────
+      # 2. Set up Theos + iOS SDK
+      # ──────────────────────────────────────────────
+      - name: Cache Theos
+        id: theos
+        uses: actions/cache@v5
+        env:
+          cache-name: theos_cache_9bc7340
+        with:
+          path: theos/
+          key: ${{ env.cache-name }}
+          restore-keys: ${{ env.cache-name }}
+
+      - name: Setup Theos
+        if: steps.theos.outputs.cache-hit != 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: theos/theos
+          ref: 9bc73406cf80b711ef4d02c15ff1dedc4478a275
+          path: theos
+          submodules: recursive
+
+      - name: Download iOS SDK
+        if: steps.theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --quiet -n --depth=1 --filter=tree:0 https://github.com/theos/sdks/
+          cd sdks
+          git sparse-checkout set --no-cone iPhoneOS16.5.sdk
+          git checkout
+          mv *.sdk $THEOS/sdks
+
+      # ──────────────────────────────────────────────
+      # 3. Clone shared header repos
+      # ──────────────────────────────────────────────
+      - name: Clone YouTubeHeader
+        run: |
+          if [ -d "$THEOS/include/YouTubeHeader" ]; then
+            cd $THEOS/include/YouTubeHeader && git pull
+          else
+            cd $THEOS/include && git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git
+          fi
+
+      - name: Clone PSHeader
+        run: |
+          if [ -d "$THEOS/include/PSHeader" ]; then
+            cd $THEOS/include/PSHeader && git pull
+          else
+            cd $THEOS/include && git clone --quiet --depth=1 https://github.com/PoomSmart/PSHeader.git
+          fi
+
+      # ──────────────────────────────────────────────
+      # 4. Clone all tweak source repos
+      # ──────────────────────────────────────────────
+      - name: Clone DontEatMyContent
+        run: git clone --quiet --depth=1 https://github.com/therealFoxster/DontEatMyContent.git
+
+      - name: Clone Gonerino
+        run: git clone --quiet --depth=1 https://github.com/castdrian/Gonerino.git
+
+      - name: Clone VolumeBoostYT
+        run: git clone --quiet --depth=1 https://github.com/VasirakCalgux/VolumeBoostYT.git
+
+      - name: Clone YouChooseQuality
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouChooseQuality.git
+
+      - name: Clone YouGetCaption
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouGetCaption.git
+
+      - name: Clone YouGroupSettings
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouGroupSettings.git
+
+      - name: Clone YouPiP
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouPiP.git
+
+      - name: Clone YouQuality
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouQuality.git
+
+      - name: Clone Return-YouTube-Dislikes
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/Return-YouTube-Dislikes.git
+
+      - name: Clone YouTubeNativeShare
+        run: git clone --quiet --depth=1 https://github.com/jkhsjdhjs/youtube-native-share.git
+
+      - name: Clone YTABConfig
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTABConfig.git
+
+      - name: Clone YTHoldForSpeed
+        run: git clone --quiet --depth=1 https://github.com/joshuaseltzer/YTHoldForSpeed.git
+
+      - name: Clone YTUHD
+        run: git clone --quiet --depth=1 https://github.com/Tonwalter888/YTUHD.git
+
+      - name: Clone YTVideoErrorAlert
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTVideoErrorAlert.git
+
+      - name: Clone YTVideoOverlay
+        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTVideoOverlay.git
+
+      # ──────────────────────────────────────────────
+      # 5. Copy inter-tweak headers for compilation
+      #    Some tweaks import headers from other tweaks
+      # ──────────────────────────────────────────────
+      - name: Copy inter-tweak headers
+        run: |
+          # YouGroupSettings headers — needed by YouPiP, YTUHD, YouQuality, RYD
+          if [ -d "YouGroupSettings" ]; then
+            cp -R YouGroupSettings/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
+            # Also try copying from source if .theos doesn't exist yet
+            find YouGroupSettings -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
+          fi
+
+          # YTVideoOverlay headers — needed by YouPiP, YTUHD, YouQuality
+          if [ -d "YTVideoOverlay" ]; then
+            cp -R YTVideoOverlay/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
+            find YTVideoOverlay -name "*.h" -not -path "*/.*" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
+          fi
+
+          # DontEatMyContent needs YTHeaders copy of YouTubeHeader
+          if [ -d "$THEOS/include/YouTubeHeader" ]; then
+            rm -rf "$THEOS/include/YTHeaders"
+            cp -R "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
+          fi
+
+          # YouTubeNativeShare may need protobuf headers
+          if [ -d "youtube-native-share" ]; then
+            find youtube-native-share -path "*/protobuf/objectivec/*.h" -exec cp {} $THEOS/include/ \; 2>/dev/null || true
+          fi
+
+      # ──────────────────────────────────────────────
+      # 6. Download YTLite .deb from releases
+      # ──────────────────────────────────────────────
+      - name: Download YTLite
+        run: |
+          deb_url="https://github.com/dayanch96/YTLite/releases/download/v${{ inputs.tweak_version }}/com.dvntm.ytlite_${{ inputs.tweak_version }}_iphoneos-arm.deb"
+          wget "$deb_url" --no-verbose -O ytlite.deb
+
+      # ──────────────────────────────────────────────
+      # 7. Build each tweak (Tier 1: no inter-tweak deps)
+      # ──────────────────────────────────────────────
+
+      - name: Build YouGroupSettings
+        run: |
+          cd YouGroupSettings && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../yougroupsettings.deb
+
+      - name: Build YTVideoOverlay
+        run: |
+          cd YTVideoOverlay && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytvideooverlay.deb
+
+      - name: Build YouGetCaption
+        run: |
+          cd YouGetCaption && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../yougetcaption.deb
+
+      - name: Build YTHoldForSpeed
+        run: |
+          cd YTHoldForSpeed && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytholdforspeed.deb
+
+      - name: Build YTVideoErrorAlert
+        run: |
+          cd YTVideoErrorAlert && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytvideoerroralert.deb
+
+      - name: Build Gonerino
+        run: |
+          cd Gonerino && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../gonerino.deb
+
+      - name: Build VolumeBoostYT
+        run: |
+          cd VolumeBoostYT && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../volumeboostyt.deb
+
+      - name: Build YTABConfig
+        run: |
+          cd YTABConfig && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytabconfig.deb
+
+      # ──────────────────────────────────────────────
+      # 8. Build each tweak (Tier 2: depends on Tier 1 headers)
+      # ──────────────────────────────────────────────
+
+      - name: Re-copy YouGroupSettings headers after build
+        run: |
+          # After building, .theos/Headers should now exist with generated headers
+          cp -R YouGroupSettings/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
+
+      - name: Re-copy YTVideoOverlay headers after build
+        run: |
+          cp -R YTVideoOverlay/.theos/Headers/ $THEOS/include/ 2>/dev/null || true
+
+      - name: Build YouPiP
+        run: |
+          cd YouPiP && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../youpip.deb
+
+      - name: Build YTUHD
+        run: |
+          cd YTUHD && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytuhd.deb
+
+      - name: Build YouQuality
+        run: |
+          cd YouQuality && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../youquality.deb
+
+      - name: Build YouChooseQuality
+        run: |
+          cd YouChooseQuality && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../youchoosequality.deb
+
+      - name: Build Return-YouTube-Dislikes
+        run: |
+          cd Return-YouTube-Dislikes && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ryd.deb
+
+      - name: Build DontEatMyContent
+        run: |
+          cd DontEatMyContent && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../demc.deb
+
+      - name: Build YouTubeNativeShare
+        run: |
+          cd youtube-native-share && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../ytnativeshare.deb
+
+      # ──────────────────────────────────────────────
+      # 9. Upload all .deb files
+      # ──────────────────────────────────────────────
+      - name: List built debs
+        run: |
+          echo "=== Built .deb files ==="
+          ls -lh *.deb 2>/dev/null || echo "No .deb files found!"
+          echo ""
+          echo "=== File sizes ==="
+          du -sh *.deb 2>/dev/null
+
+      - name: Upload debs as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tweak-debs
+          path: "*.deb"
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: tweaks-${{ github.run_number }}
+          name: YouTube Tweaks Build #${{ github.run_number }}
+          files: "*.deb"
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output Release URL
+        run: |
+          echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases"
